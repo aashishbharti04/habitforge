@@ -54,6 +54,36 @@ function longestStreak(h) {
 }
 function totalDone(h) { return Object.keys(h.done).length; }
 
+// rich per-habit analytics
+function countLastDays(h, n) {
+  let c = 0, t = new Date();
+  for (let i = 0; i < n; i++) if (h.done[dstr(addDays(t, -i))]) c++;
+  return c;
+}
+function rate30(h) { return Math.round((countLastDays(h, 30) / 30) * 100); }
+function thisWeekCount(h) {
+  const t = new Date(), sun = addDays(t, -t.getDay());
+  let c = 0; for (let i = 0; i <= t.getDay(); i++) if (h.done[dstr(addDays(sun, i))]) c++;
+  return c;
+}
+function monthCount(h) {
+  const t = new Date(), y = t.getFullYear(), m = t.getMonth() + 1;
+  return Object.keys(h.done).filter((ds) => { const [yy, mm] = ds.split("-").map(Number); return yy === y && mm === m; }).length;
+}
+function yearCount(h) {
+  const y = new Date().getFullYear();
+  return Object.keys(h.done).filter((ds) => Number(ds.split("-")[0]) === y).length;
+}
+function weeklyTrend(h, weeks) {
+  const t = new Date(), last = addDays(t, 6 - t.getDay()), out = [];
+  for (let w = weeks - 1; w >= 0; w--) {
+    const sun = addDays(last, -(w * 7) - 6);
+    let c = 0; for (let i = 0; i < 7; i++) { const d = addDays(sun, i); if (d <= t && h.done[dstr(d)]) c++; }
+    out.push(c);
+  }
+  return out;
+}
+
 // ---- rendering ----
 function render() {
   renderStats();
@@ -68,10 +98,12 @@ function renderStats() {
   const doneToday = habits.filter((h) => h.done[today()]).length;
   const best = habits.reduce((m, h) => Math.max(m, currentStreak(h)), 0);
   const checks = habits.reduce((s, h) => s + totalDone(h), 0);
+  const avgRate = total ? Math.round(habits.reduce((s, h) => s + rate30(h), 0) / total) : 0;
   const data = [
     { num: total, lbl: "Habits", c: "var(--cyan)" },
     { num: `${doneToday}/${total}`, lbl: "Today", c: "var(--green)" },
     { num: best + "🔥", lbl: "Best streak", c: "var(--amber)" },
+    { num: avgRate + "%", lbl: "30-day avg", c: "var(--purple)" },
     { num: checks, lbl: "Check-ins", c: "var(--magenta)" },
   ];
   $("stats").innerHTML = data.map((s) =>
@@ -92,6 +124,15 @@ function habitCard(h) {
         ${doneTodayFlag ? "✓ Done today" : "Mark today"}
       </button>
       <button class="del-btn" data-del title="Delete">🗑</button>
+    </div>
+    <div class="habit-stats">
+      <span class="pill">📈 30-day <b>${rate30(h)}%</b></span>
+      <span class="pill">📅 Week <b>${thisWeekCount(h)}/7</b></span>
+      <span class="pill">🗓 Month <b>${monthCount(h)}</b></span>
+      <span class="pill">⭐ Year <b>${yearCount(h)}</b></span>
+    </div>
+    <div class="trend" title="Completions per week (last 12 weeks)">
+      ${weeklyTrend(h, 12).map((c) => `<span class="tbar" style="height:${Math.max(6, (c / 7) * 100)}%;background:${h.color}" title="${c}/7"></span>`).join("")}
     </div>
     <div class="heatmap-wrap"><div class="heatmap"></div></div>
     <div class="heat-legend">Less
